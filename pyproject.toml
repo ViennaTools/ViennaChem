@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "viennachem"
+version = "0.1.0"
+description = "Surface-kinetics mechanisms derived from chemical reaction equations"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+authors = [{ name = "Lado Filipovic", email = "filipovic@iue.tuwien.ac.at" }]
+keywords = ["surface kinetics", "chemical mechanism", "CVD", "plasma etching"]
+classifiers = [
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Chemistry",
+  "Topic :: Scientific/Engineering :: Physics",
+]
+
+# The compiler needs symbolic algebra and a reaction-file parser. Note that
+# `viennachem.evaluate` deliberately needs neither: mechanism data is solvable
+# with the standard library alone.
+dependencies = ["sympy>=1.10", "PyYAML>=5.4"]
+
+[project.urls]
+Homepage = "https://github.com/ViennaTools/ViennaChem"
+
+[project.scripts]
+viennachem = "viennachem.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["viennachem*"]
+
+[tool.setuptools.package-data]
+viennachem = ["examples/*.yaml", "examples/*.mechanism.json"]
