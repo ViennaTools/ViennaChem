@@ -268,12 +268,22 @@ class Mechanism:
         return n
 
     def check_orders(self):
-        """An explicit order must name something the step actually consumes."""
+        """An explicit order must name a reactant, or a free-site pool.
+
+        A free site is the one thing a rate law can depend on without the
+        stoichiometry recording it. Dissociative adsorption that leaves a solid
+        behind is the case: it proceeds on a pair of empty sites, so its rate
+        carries theta_*G theta_*A, while no coverage changes. Site conservation
+        cannot infer that, because there is no adsorbate on either side to
+        count, so the order states it.
+        """
+        tokens = set(self.site_token.values())
         for j, r in enumerate(self.reactions, 1):
             for sp_ in (r.get("order") or {}):
-                if sp_ not in r["lhs"]:
-                    sys.exit(f"[R{j}] order names '{sp_}', which is not a "
-                             f"reactant of '{r['eq']}'")
+                if sp_ not in r["lhs"] and sp_ not in tokens:
+                    sys.exit(f"[R{j}] order names '{sp_}', which is neither a "
+                             f"reactant of '{r['eq']}' nor a free-site pool "
+                             f"{sorted(tokens)}")
 
     # -- reversible steps --------------------------------------------------
     def reverse_of(self, r):
@@ -534,6 +544,16 @@ class Mechanism:
         for _ in range(200):
             Fx = sp.Matrix(f(*x))
             Jx = sp.Matrix(jac(*x))
+            # A species nothing produces and nothing consumes leaves an empty
+            # row: the mechanism says nothing about it, and the system is
+            # singular. That happens whenever a supplied flux is zero, which is
+            # how a large mechanism is run on part of its gas phase. Nothing
+            # makes it, so pin it to zero.
+            for i in range(n):
+                if abs(Fx[i]) < 1e-30 and all(abs(Jx[i, j]) < 1e-30
+                                              for j in range(n)):
+                    Jx[i, i] = 1.0
+                    Fx[i] = x[i]
             dx = Jx.solve(-Fx)
             x = [max(0.0, min(1.0, float(x[i] + dx[i]))) for i in range(n)]
             if max(abs(float(d)) for d in dx) < 1e-14:

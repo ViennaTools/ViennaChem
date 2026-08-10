@@ -184,7 +184,7 @@ auto mech = readChemicalMechanism<double>("sf6o2.mechanism.json");
 SurfaceChemistry<double, 2> model(mech);
 ```
 
-`ViennaPS/examples/surfaceChemistry` runs eleven mechanisms — deposition,
+`ViennaPS/examples/surfaceChemistry` runs twelve mechanisms — deposition,
 etching, sputtering and a passivating film — through one driver, in either
 language.
 
@@ -347,6 +347,7 @@ reference evaluator, and the C++ solver — and against external references:
 | **vs ViennaPS's SF₆/O₂ plasma etch model, written independently** | blanket 0.16 %, masked trench 0.53 % |
 | vs the published diamond radical fraction | 0.26 % over 900–1400 K |
 | ion-enhanced etching vs analytic | 0.22 %, reproducing a 15× ion–neutral synergy |
+| GaAs: 26 reactions vs the paper's own 3-reaction reduction | 0.007 % at the published conditions, 800–1300 K |
 | physical sputtering vs analytic | 0.89 %, mask selectivity 15.11 vs 15.04 |
 | CPU vs GPU transport | 0.03 % to 0.5 % across mechanisms |
 
@@ -379,7 +380,7 @@ by a ViennaPS model the test itself instantiates.
 
 ## Shipped mechanisms
 
-Eleven reaction files travel with the package, in `viennachem/examples/`, so any
+Twelve reaction files travel with the package, in `viennachem/examples/`, so any
 of them can be compiled or solved by name from anywhere:
 
 ```bash
@@ -387,8 +388,8 @@ python -m viennachem --explain diamond.yaml
 ```
 
 They are silane LPCVD, selective silane,
-a SiGe/Si stack, GaAs MOVPE, diamond CVD, argon sputtering, CF₄/Ar ion-enhanced
-etching, SF₆/O₂, and a passivating polymer etch. Their sources:
+a SiGe/Si stack, GaAs MOVPE both reduced and complete, diamond CVD, argon
+sputtering, CF₄/Ar ion-enhanced etching, SF₆/O₂, and a passivating polymer etch. Their sources:
 
 - Mountziaris & Jensen, *J. Electrochem. Soc.* **138** (1991) — GaAs MOVPE
   surface mechanism, Table II

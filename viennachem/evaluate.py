@@ -288,10 +288,12 @@ def solve_coverages(
             break
 
         # damp so the step keeps each theta_i >= 0 and each type's sum <= 1
+        # A coverage already at zero has no room to give, so it must not
+        # scale the step to nothing; the clamp below holds it at zero.
         scale = 1.0
         for i in range(ncov):
-            if theta[i] + dx[i] < 0.0 and dx[i] < 0.0:
-                scale = min(scale, 0.5 * theta[i] / (-dx[i]) if theta[i] > 0 else 0.0)
+            if theta[i] > 0.0 and theta[i] + dx[i] < 0.0 and dx[i] < 0.0:
+                scale = min(scale, 0.5 * theta[i] / (-dx[i]))
         for t in range(nsite):
             cur = sum(theta[i] for i in range(ncov) if site[i] == t)
             step = sum(dx[i] for i in range(ncov) if site[i] == t)
