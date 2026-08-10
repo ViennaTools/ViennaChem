@@ -109,6 +109,12 @@ new one.
 Python 3.9 or newer, and pip.
 
 ```bash
+pip install git+https://github.com/ViennaTools/ViennaChem@main
+```
+
+or from a checkout, which is what you want to run the tests:
+
+```bash
 git clone https://github.com/ViennaTools/ViennaChem
 pip install ./ViennaChem
 ```
