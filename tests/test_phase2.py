@@ -5,7 +5,8 @@ Checks, in order of increasing integration:
 
   1. the C++ mechanism evaluates coverages and growth rate identically to the
      pure-Python IR evaluator (same algorithm, two implementations),
-  2. it matches the hand-written psSilaneDeposition.hpp reference values,
+  2. it matches a by-hand implementation of the same mechanism (the values
+     frozen below, from tests/reference/psSilaneDeposition.hpp),
   3. a blanket (flat wafer) simulation reproduces the analytic growth rate,
   4. the coverage-dependent sticking reaches the particle, so a trench shows the
      expected step coverage.
@@ -70,7 +71,7 @@ def test_mechanism_matches_python():
 
 
 def test_against_reference(mech):
-    print("\n2) C++ mechanism vs the hand-written psSilaneDeposition.hpp")
+    print("\n2) C++ mechanism vs the by-hand implementation")
     gamma = vc.default_fluxes(IR)
     theta = mech.solveCoverages(gamma, [0.0, 0.0])
     v = mech.growthRate(gamma, theta)

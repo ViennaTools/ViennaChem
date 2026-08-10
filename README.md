@@ -337,8 +337,8 @@ reference evaluator, and the C++ solver — and against external references:
 | check | result |
 |---|---|
 | analytic Jacobian vs finite difference | 4.7e-10 (one site type), 5.9e-10 (two) |
-| vs ViennaPS's hand-written silane model | `θ_H = 0.09159`, `v = 0.07178` nm/s |
-| **vs ViennaPS's hand-written SF₆/O₂ plasma etch** | blanket 0.16 %, masked trench 0.53 % |
+| vs a by-hand implementation of the same silane mechanism | `θ_H = 0.09159`, `v = 0.07178` nm/s |
+| **vs ViennaPS's SF₆/O₂ plasma etch model, written independently** | blanket 0.16 %, masked trench 0.53 % |
 | vs the published diamond radical fraction | 0.26 % over 900–1400 K |
 | ion-enhanced etching vs analytic | 0.22 %, reproducing a 15× ion–neutral synergy |
 | physical sputtering vs analytic | 0.89 %, mask selectivity 15.11 vs 15.04 |
@@ -366,6 +366,11 @@ cd tests && python test_ir.py
 
 `test_ir.py` and `test_loader.py` are fast; the rest run simulations.
 
+`tests/reference/` holds the by-hand implementation of the silane mechanism that
+the frozen reference values come from, so every number the suite checks against
+is either derived in the test, read from a file in this repository, or produced
+by a ViennaPS model the test itself instantiates.
+
 ## Shipped mechanisms
 
 Eleven reaction files travel with the package, in `viennachem/examples/`, so any
@@ -383,8 +388,8 @@ etching, SF₆/O₂, and a passivating polymer etch. Their sources:
   surface mechanism, Table II
 - Bristol CVD Diamond Group, [standard growth
   model](https://www.chm.bris.ac.uk/pt/diamond/growthmodel.htm) — diamond
-- ViennaPS `psSilaneDeposition` and `psSF6O2Etching` — the two hand-written
-  models used as references
+- ViennaPS `psSF6O2Etching` — the hand-written plasma model the SF₆/O₂ file is
+  checked against
 
 Where rate constants are illustrative rather than published, the file says so.
 

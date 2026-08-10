@@ -5,8 +5,9 @@
 `psPlasmaEtching.hpp`) written as reactions and rate constants. This compares
 the generated mechanism against that hand-written C++ on the same geometry.
 
-This mirrors what validated the deposition side: silane was checked against the
-hand-written `psSilaneDeposition`. It is a stronger check than an analytic one,
+Unlike the silane check, whose reference was written alongside the generator,
+this one is independent: `psSF6O2Etching` is ViennaPS's own model. It is also a
+stronger check than an analytic one,
 because it exercises the transport, the ion, the coverages and the velocity
 together.
 

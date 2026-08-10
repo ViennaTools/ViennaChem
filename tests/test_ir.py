@@ -79,7 +79,8 @@ surface:
   - {eq: "Ga* + As* -> GaAs", type: surface,    k0: 1.0e12, Ea: 1.0}
 """
 
-# Reference values from the hand-written ViennaPS model psSilaneDeposition.hpp
+# Reference values from a by-hand implementation of the same mechanism,
+# kept in tests/reference/psSilaneDeposition.hpp
 REF_THETA_SIH3 = 1.329904e-05
 REF_THETA_H = 9.159010e-02
 REF_V = 0.071779
