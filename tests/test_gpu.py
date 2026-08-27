@@ -15,6 +15,7 @@ kept there.
 Run with the ViennaPS venv:  .venv/bin/python test_gpu.py
 """
 
+import json
 import sys
 
 import numpy as np
@@ -100,6 +101,39 @@ def ion_blanket(mechanism, material, engine, t=100.0, rays=3000):
     return (top(dom)[:, 1].max() - y0) / t
 
 
+def two_site_trench(engine, rays=2000, t=1.0):
+    """A two-site mechanism with a LARGE sticking, through a feature.
+
+    This is the case none of the other checks reach. Silane's sticking is
+    ~4e-4, so its step coverage is ~1 on any engine and nothing about
+    re-emission is tested; the multi-site and ion checks are blankets, where
+    shadowing cannot matter. GaAs has s = 1 on two site types, so the device
+    has to pick the right free-site pool per particle: get it wrong and the
+    two coverages sum past one, theta_free clamps to zero, nothing sticks, and
+    every ray reaches the bottom.
+    """
+    data = vc.from_file("gaas_reversible.yaml")
+    mech = ps.ChemicalMechanism.fromJSON(json.dumps(data))
+    dom = ps.Domain(gridDelta=2.0, xExtent=200.0, yExtent=200.0)
+    ps.MakeTrench(domain=dom, trenchWidth=80.0, trenchDepth=120.0,
+                  material=ps.Material.Si).apply()
+    dom.duplicateTopLevelSet(ps.Material.GaAs)
+
+    def bounds():
+        n = top(dom)
+        return n[:, 1].max(), n[:, 1].min()
+
+    t0, b0 = bounds()
+    p = ps.Process(dom, ps.SurfaceChemistry(mech), t)
+    p.setFluxEngineType(engine)
+    c = ps.CoverageParameters(); c.tolerance = 1e-5; c.maxIterations = 40
+    p.setParameters(c)
+    r = ps.RayTracingParameters(); r.raysPerPoint = rays; p.setParameters(r)
+    p.apply()
+    t1, b1 = bounds()
+    return (b1 - b0) / (t1 - t0)
+
+
 def main():
     print("GPU gate: SurfaceChemistry on the device")
 
@@ -154,6 +188,19 @@ def main():
             rel = abs(gpu - cpu) / abs(cpu)
             check(f"{yaml} on {m}: GPU matches CPU", rel < 0.05,
                   f"CPU {cpu:.5f}   GPU {gpu:.5f}   ({100*rel:.2f}%)")
+
+    print("\n6) a two-site mechanism in a trench, where the device must pick")
+    print("   the free-site pool per particle")
+    s_cpu = two_site_trench(ps.FluxEngineType.CPU_TRIANGLE)
+    s_gpu = two_site_trench(GPU)
+    print(f"      CPU_TRIANGLE step {s_cpu:.4f}      GPU_LINE step {s_gpu:.4f}")
+    check("two-site step coverage agrees", abs(s_gpu - s_cpu) < 0.03,
+          f"{abs(s_gpu - s_cpu):.4f}")
+    # A device that sums both site types clamps theta_free to zero, sticks
+    # nothing, and fills the trench uniformly. Both engines would have to fail
+    # the same way to slip past the comparison above, so pin the value too.
+    check("the sticking is applied at all, not bypassed", s_gpu < 0.6,
+          f"step {s_gpu:.4f}, well below the ~1.0 of no sticking")
 
     print()
     if FAIL:

@@ -529,6 +529,25 @@ class Mechanism:
         ]
         unknowns = [th[s] for s in self.surf]
 
+        # A mechanism may have no adsorbed species at all -- physical
+        # sputtering is one reaction between an ion and the solid. There is
+        # then nothing to solve for: no residual, no Jacobian, and the rates
+        # are already numbers.
+        if not unknowns:
+            growth = sum(
+                self.net(r, s) * rates[j] / self.solid_density(s)
+                for s in self.solid
+                for j, r in enumerate(self.reactions)
+            )
+            num = dict(subs)
+            num.update({th_free[t]: 1 for t in self.site_types})
+            return dict(
+                theta={}, v=float(growth.subs(num)), rates=rates, th=th,
+                th_free=th_free, closure=closure, growth=growth, subs=subs,
+                F=sp.Matrix(0, 1, []), J=sp.Matrix(0, 0, []), unknowns=[],
+                num=num,
+            )
+
         F = sp.Matrix(eqs)
         J = F.jacobian(unknowns)
         n = len(unknowns)
