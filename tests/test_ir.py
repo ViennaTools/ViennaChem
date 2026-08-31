@@ -368,13 +368,57 @@ def test_kads_sticking():
           close(v, REF_V, 1e-4), f"{v:.6f} nm/s")
 
 
+def test_pressure_flux():
+    """A flux derived from a partial pressure.
+
+    Hertz-Knudsen: Gamma = p / sqrt(2 pi m kB T), equivalently (1/4) n vbar
+    with n = p / (kB T). The molar mass comes from the formula, and the IR
+    carries the derived flux, so nothing downstream changes.
+    """
+    print("\n12) flux derived from a partial pressure")
+
+    # the pressure that reproduces Gamma = 1.0e3 (1e15 /cm^2 /s) at 900 K,
+    # from the definition
+    KB_J = 1.380649e-23
+    N_A = 6.02214076e23
+    m = vc.molar_mass("SiH4") * 1e-3 / N_A  # kg
+    p = 1.0e18 * 1e4 * math.sqrt(2.0 * math.pi * m * KB_J * 900.0)  # Pa
+
+    p_yaml = SILANE.replace("flux: 1.0e3", f"pressure: {p / 0.133322!r}")
+    path = write_tmp(p_yaml); ir = vc.from_file(path); os.unlink(path)
+    check("Gamma = p / sqrt(2 pi m kB T), in the default mTorr",
+          close(ir["gas"][0]["flux"], 1.0e3, 1e-9),
+          f"{ir['gas'][0]['flux']:.6f}")
+
+    path = write_tmp(SILANE); ir_flux = vc.from_file(path); os.unlink(path)
+    v = vc.evaluate(ir)[1]
+    v_flux = vc.evaluate(ir_flux)[1]
+    check("growth rate matches the flux mechanism", close(v, v_flux, 1e-8),
+          f"{v:.9f} vs {v_flux:.9f} nm/s")
+
+    # another unit is declared once, at the document level
+    pa_yaml = ("pressureUnit: Pa\n" + SILANE).replace(
+        "flux: 1.0e3", f"pressure: {p!r}")
+    path = write_tmp(pa_yaml); ir_t = vc.from_file(path); os.unlink(path)
+    check("Pa declared once at the document level",
+          close(ir_t["gas"][0]["flux"], 1.0e3, 1e-9),
+          f"{ir_t['gas'][0]['flux']:.6f}")
+
+    # the shipped example is silane.yaml in reactor units
+    ship = vc.from_file("silane_pressure.yaml")
+    check("silane_pressure.yaml reproduces silane.yaml",
+          close(ship["gas"][0]["flux"], 1.0e3, 1e-3)
+          and close(vc.evaluate(ship)[1], REF_V, 1e-3),
+          f"flux {ship['gas'][0]['flux']:.3f}, v {vc.evaluate(ship)[1]:.6f}")
+
+
 def test_energy_units():
     """Ea may be given in kcal/mol against R; the IR is always eV.
 
     The two forms are identical because Ea[kcal/mol]/(R T) == Ea[eV]/(kB T),
     so the conversion happens once at the input boundary.
     """
-    print("\n12) activation energy in kcal/mol")
+    print("\n13) activation energy in kcal/mol")
 
     check("1 kcal/mol is 0.0433641 eV",
           close(vc.EV_PER_KCAL_PER_MOL, 0.0433641, 1e-5),
@@ -421,7 +465,7 @@ def test_energy_units():
 def test_multiple_site_types():
     """A two-site mechanism: one closure per type, and the front end (SymPy) and
     the IR evaluator must land on the same steady state."""
-    print("\n13) multiple site types (two-site GaAs toy)")
+    print("\n14) multiple site types (two-site GaAs toy)")
     path = write_tmp(TWOSITE)
     m = vc.Mechanism(path)
     ir = vc.build_data(m)
@@ -498,7 +542,7 @@ def test_reversible_steps():
     so the steady state is exact:
         theta = s*Gamma / (s*Gamma + k_des + k_dep).
     """
-    print("\n14) reversible steps (Langmuir closed form)")
+    print("\n15) reversible steps (Langmuir closed form)")
     path = write_tmp(REVERSIBLE)
     m = vc.Mechanism(path)
     ir = vc.build_data(m)
@@ -569,6 +613,7 @@ def main():
     test_site_density(ir)
     test_flux_dependence(ir)
     test_kads_sticking()
+    test_pressure_flux()
     test_energy_units()
     test_multiple_site_types()
     test_reversible_steps()

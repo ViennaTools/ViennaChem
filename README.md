@@ -184,9 +184,9 @@ auto mech = readChemicalMechanism<double>("sf6o2.mechanism.json");
 SurfaceChemistry<double, 2> model(mech);
 ```
 
-`ViennaPS/examples/surfaceChemistry` runs twelve mechanisms — deposition,
-etching, sputtering and a passivating film — through one driver, in either
-language.
+`ViennaPS/examples/surfaceChemistry` runs fifteen mechanisms — deposition,
+etching, sputtering and a passivating film through one driver, in either
+language, and a two-step ALD cycle through its own.
 
 ## The reaction file
 
@@ -197,6 +197,7 @@ language.
 | `name` | the mechanism's name; used for output files |
 | `temperature` | surface temperature in K |
 | `energyUnit` | `eV` (default) or `kcal/mol`, applied to every `Ea` |
+| `pressureUnit` | `mTorr` (default), `Torr`, `mbar` or `Pa`, applied to every `pressure` |
 | `species` | the species and their phases, below |
 | `surface` | the reactions, below |
 | `siteTypes` | optional, `[{name, density}]`, the site density per type |
@@ -208,7 +209,7 @@ A name is read as a chemical formula, so `SiH4` is one Si and four H. A trailing
 
 | phase | keys | meaning |
 |---|---|---|
-| `gas` | `flux` | incident flux in 1e15 /cm² /s |
+| `gas` | `flux` or `pressure` | incident flux in 1e15 /cm² /s, or the partial pressure, converted by kinetic theory, `Γ = p/√(2πmk_BT)` |
 | `surface` | `site`, `S0` | the site type it occupies (default `"default"`), and optionally that type's site density |
 | `solid` | `rho` | density in 1e22 /cm³; a number, or a mapping `{default: …, Mask: …}` per material |
 | `ion` | `flux`, `meanEnergy`, `sigmaEnergy`, `exponent`, `inflectAngle`, `n_l`, `minAngle`, `thetaRMin`, `thetaRMax` | the ion source; energies in eV, angles in degrees |

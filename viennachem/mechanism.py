@@ -29,6 +29,7 @@ import sympy as sp
 import yaml
 
 KB_EV = 8.617333262e-5  # eV / K
+KB_J = 1.380649e-23  # J / K
 R_GAS = 8.314462618  # J / (mol K)
 
 # Activation energies are canonically eV inside the toolchain. Published tables
@@ -42,6 +43,17 @@ EV_PER_KCAL_PER_MOL = KCAL_IN_J / (N_AVOGADRO * ELEMENTARY_CHARGE)
 ENERGY_UNITS = {
     "eV": 1.0,
     "kcal/mol": EV_PER_KCAL_PER_MOL,
+}
+
+# A gas species may give a partial pressure instead of a flux; kinetic theory
+# converts it (see flux_from_pressure). Pressures are canonically mTorr, the
+# unit LPCVD recipes are written in; a file written against another unit says
+# so once with `pressureUnit`.
+PRESSURE_UNITS = {  # in Pa
+    "mTorr": 0.133322,
+    "Torr": 133.322,
+    "mbar": 100.0,
+    "Pa": 1.0,
 }
 
 # Atomic masses in g/mol, for the mean thermal speed when a sticking
@@ -164,6 +176,12 @@ class Mechanism:
                      f"expected one of {sorted(ENERGY_UNITS)}")
         self.eV_per_energy = ENERGY_UNITS[self.energy_unit]
 
+        self.pressure_unit = str(doc.get("pressureUnit", "mTorr"))
+        if self.pressure_unit not in PRESSURE_UNITS:
+            sys.exit(f"unknown pressureUnit '{self.pressure_unit}'; "
+                     f"expected one of {sorted(PRESSURE_UNITS)}")
+        self.Pa_per_pressure = PRESSURE_UNITS[self.pressure_unit]
+
         self.gas = [s for s, d in self.species.items() if d["phase"] == "gas"]
         self.surf = [s for s, d in self.species.items() if d["phase"] == "surface"]
         self.solid = [s for s, d in self.species.items() if d["phase"] == "solid"]
@@ -173,6 +191,22 @@ class Mechanism:
         # deposits, so the chemistry sees an ordinary Gamma.
         self.ions = [s for s, d in self.species.items() if d["phase"] == "ion"]
         self.gas = self.gas + self.ions
+
+        # A gas species may be given as a partial pressure -- the quantity a
+        # reactor set point actually controls. It is converted to the incident
+        # flux here, once, so everything downstream (the IR, both evaluators,
+        # ViennaPS) keeps seeing a flux. An ion still needs a flux: a pressure
+        # defines the thermal wall flux, not a directed ion flux.
+        for s in self.gas:
+            d = self.species[s]
+            if "pressure" not in d:
+                continue
+            if "flux" in d:
+                sys.exit(f"gas species '{s}' gives both pressure and flux; "
+                         f"give one")
+            if s in self.ions:
+                sys.exit(f"ion '{s}' needs a flux, not a pressure")
+            d["flux"] = self.flux_from_pressure(s, float(d["pressure"]))
 
         # Site types. Each surface species sits on a named site type ("default"
         # if unspecified). Each type has its own free-site pool and its own
@@ -324,6 +358,20 @@ class Mechanism:
             sys.exit(f"adsorption step '{r['eq']}' must consume exactly one gas "
                      f"species, found {gs}")
         return gs[0]
+
+    def flux_from_pressure(self, name, p):
+        """The incident flux [1e15 /cm^2 /s] of a gas at partial pressure p.
+
+        Hertz-Knudsen: the wall flux of an ideal gas is (1/4) n vbar with
+        n = p / (kB T), which is Gamma = p / sqrt(2 pi m kB T). The molar mass
+        behind vbar comes from the formula, so only the pressure is asked of
+        the user. The flux is evaluated at the file's temperature, like every
+        other derived constant.
+        """
+        p_Pa = p * self.Pa_per_pressure
+        n = p_Pa / (KB_J * self.T) * 1e-6  # /cm^3
+        vbar = speed_coefficient(name) * math.sqrt(self.T)  # cm/s
+        return 0.25 * n * vbar / 1e15
 
     def adsorption_constant(self, r):
         """(prefactor, beta) of the sticking coefficient, s = prefactor T^beta e^(-Ea/kT).
