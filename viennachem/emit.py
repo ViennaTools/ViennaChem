@@ -92,6 +92,25 @@ def _density_of(mech, tname):
     return None
 
 
+def _blocking(mech, surf):
+    """The blocking pool a mechanism declares, resolved to coverage indices.
+
+    `weights` are the blockers and how many places each takes, `adducts` those
+    whose contribution is itself scaled by the free fraction, and `capacity` is
+    how many places there are per site of the pool's own type.
+    """
+    blk = mech.doc.get("blocking")
+    if not blk:
+        return None
+    idx = {s_: i for i, s_ in enumerate(surf)}
+    def resolve(d):
+        return [{"idx": idx[k], "weight": float(v)}
+                for k, v in (d or {}).items() if k in idx]
+    return {"weights": resolve(blk.get("pool")),
+            "adducts": resolve(blk.get("adducts")),
+            "capacity": float(blk.get("capacity", 1.0))}
+
+
 def build_data(mech):
     """Mechanism -> mechanism data, as a plain dict."""
     surf = mech.surf
@@ -192,6 +211,8 @@ def build_data(mech):
             "nu": [float(mech.net(r, s)) for s in surf],
             # atoms of each solid added per event; negative means removed
             "solidAtoms": [float(mech.net(r, s)) for s in solids],
+            # whether the blocking pool, where one is declared, throttles it
+            "blocked": bool(r.get("blocked", False)),
         }
         if has_materials:
             entry["materialConstants"] = mat_constants
@@ -301,6 +322,12 @@ def build_data(mech):
         "name": mech.name,
         "siteTypes": [{"name": t, "density": _density_of(mech, t)}
                       for t in mech.site_types],
+        # A blocking pool, where a mechanism declares one. Some published
+        # surface models multiply every adsorption rate by the fraction of the
+        # surface a bulky ligand leaves free, which is not a site closure: the
+        # blockers are weighted, and a species that is itself an adduct blocks
+        # in proportion to the free fraction, so the definition is implicit.
+        "blocking": _blocking(mech, surf),
         "coverages": [{"name": s, "site": site_index[mech.site_of[s]]}
                       for s in surf],
         "gas": gas_entries,

@@ -228,6 +228,7 @@ class Mechanism:
         for r in self.reactions:
             r["lhs"], r["rhs"], reversible = parse_eq(r["eq"])
             self.infer_free_sites(r)
+            self.check_atom_balance(r)
             expanded.append(r)
             if reversible:
                 expanded.append(self.reverse_of(r))
@@ -253,6 +254,36 @@ class Mechanism:
                 r["lhs"][tok] = rs - ls
             elif ls > rs:
                 r["rhs"][tok] = ls - rs
+
+    # -- 0b. conservation of atoms ----------------------------------------
+    def check_atom_balance(self, r):
+        """Every element entering a reaction has to leave it.
+
+        A free site carries no atoms, and an ion is a projectile that delivers
+        energy and leaves neutralised, so neither takes part. Everything else
+        contributes its composition times its stoichiometric coefficient, read
+        from the species name where that is a formula and from an explicit
+        `atoms` entry where it is not.
+        """
+        def total(side):
+            out = {}
+            for sp_, n in side.items():
+                if sp_.startswith("*") or sp_ in self.ions:
+                    continue
+                for el, k in self.atoms(sp_).items():
+                    out[el] = out.get(el, 0) + n * k
+            return out
+
+        lhs, rhs = total(r["lhs"]), total(r["rhs"])
+        bad = {el: (lhs.get(el, 0), rhs.get(el, 0))
+               for el in set(lhs) | set(rhs)
+               if lhs.get(el, 0) != rhs.get(el, 0)}
+        if bad:
+            detail = ", ".join("%s %d->%d" % (el, a, b)
+                               for el, (a, b) in sorted(bad.items()))
+            sys.exit("reaction '%s' does not balance: %s.\n"
+                     "  A species whose name is not a formula must declare its "
+                     "composition with an `atoms` entry." % (r["eq"], detail))
 
     # -- composition -------------------------------------------------------
     def atoms(self, sp_):

@@ -161,10 +161,31 @@ def _free_part(rx, frees):
     return val
 
 
-def rate(rx, k, gammas, theta, frees, material=None):
+def blocked_fraction(ir, theta):
+    """The fraction of the surface a blocking pool leaves free.
+
+    The pool is declared with a weight per blocker and a capacity. Adduct
+    blockers count in proportion to the free fraction itself, which makes the
+    definition implicit; it is linear, so it is solved directly:
+
+        t = a + b(1 - t)   =>   t = (a + b) / (1 + b)
+    """
+    blk = ir.get("blocking")
+    if not blk:
+        return 1.0
+    cap = blk.get("capacity", 1.0) or 1.0
+    a = sum(w["weight"] * theta[w["idx"]] for w in blk.get("weights") or []) / cap
+    b = sum(w["weight"] * theta[w["idx"]] for w in blk.get("adducts") or []) / cap
+    t = (a + b) / (1.0 + b)
+    return max(0.0, min(1.0, 1.0 - t))
+
+
+def rate(rx, k, gammas, theta, frees, material=None, free_fraction=None):
     val = _gas_part(rx, k, gammas, material) * _free_part(rx, frees)
     for f in rx["covFactors"]:
         val *= theta[f["idx"]] ** f["exp"]
+    if free_fraction is not None and rx.get("blocked"):
+        val *= free_fraction
     return val
 
 
