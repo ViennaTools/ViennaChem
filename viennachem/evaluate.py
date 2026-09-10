@@ -253,6 +253,127 @@ def _solve(A, b):
 
 
 # --------------------------------------------------------------------------
+# transient step, for a cyclic process
+# --------------------------------------------------------------------------
+
+
+def step_coverages(ir, theta, gammas, dt, max_change=2e-4, ks=None,
+                   material=None, max_sub_steps=4000000, grown=None,
+                   free_fraction=None, extents=None, trace=None, t0=0.0):
+    """Integrate the coverages over dt, and return them with what was grown.
+
+    The same rule the C++ model applies, so a figure drawn from here and a run
+    of the driver describe one model. A cyclic process integrates thousands of
+    pulses in sequence, so a rule that is merely convergent is not enough: an
+    error that does not cancel between the states a reaction consumes and the
+    states it produces accumulates over the cycles. Every reaction here
+    transfers occupancy from the states it consumes into the states it
+    produces, written as a rate coefficient q[i][k], and the sub-step solves
+
+        (I + h diag(L) - h q) theta(t+h) = theta(t),   L[k] = sum_i q[i][k]
+
+    The columns of that matrix sum to one, so the occupancy of every site type
+    is conserved exactly whatever the sub-step, and the matrix is an M-matrix,
+    so the result stays non-negative. The free fraction of each site type is
+    carried as an extra unknown, so a reaction that takes a free site or that
+    frees one conserves as well.
+
+    `free_fraction`, where a mechanism states steric blocking, replaces the
+    free-site part of every rate law. It follows the coverages, so pass the
+    callable `blocked_fraction` rather than a value and it is re-evaluated on
+    every sub-step. `extents`, a list one entry per reaction,
+    accumulates the time integral of each reaction rate over dt, which is what
+    a per-channel accounting of the growth needs. `trace`, a list, receives
+    `(t, theta, grown)` after every sub-step, which is what a figure of the
+    coverages through a pulse reads.
+    """
+    if ks is None:
+        ks = rate_constants(ir, material=material)
+    site = coverage_sites(ir)
+    nsite = len(ir["siteTypes"])
+    dens = [t.get("density") for t in ir["siteTypes"]]
+    scale = [1e15 / dens[site[i]] if dens[site[i]] else 1.0
+             for i in range(len(site))]
+    n = len(theta)
+    N = n + nsite
+    theta = list(theta)
+    total = 0.0 if grown is None else grown
+    elapsed, sub = 0.0, 0
+    while elapsed < dt - 1e-12 and sub < max_sub_steps:
+        sub += 1
+        free = free_fractions(ir, theta)
+        blocked = (free_fraction(ir, theta) if callable(free_fraction)
+                   else free_fraction)
+        x = theta + free
+        q = [[0.0] * N for _ in range(N)]
+        rj_all = [0.0] * len(ir["reactions"])
+        for j, rx in enumerate(ir["reactions"]):
+            rj = rate(rx, ks[j], gammas, theta, free, material=material,
+                      free_fraction=blocked)
+            rj_all[j] = rj
+            if rj == 0.0:
+                continue
+            # one site type at a time: each is conserved on its own, and a
+            # reaction touching two types moves each separately
+            for t in range(nsite):
+                gain = [0.0] * N
+                lose = [0.0] * N
+                gv = lv = 0.0
+                for i in range(n):
+                    if site[i] != t or rx["nu"][i] == 0.0:
+                        continue
+                    w = rx["nu"][i] * scale[i]
+                    if w > 0.0:
+                        gain[i] = w; gv += w
+                    else:
+                        lose[i] = -w; lv += -w
+                # what the tracked states do not balance comes from, or returns
+                # to, the free fraction of the type
+                if gv > lv:
+                    lose[n + t] += gv - lv; lv = gv
+                elif lv > gv:
+                    gain[n + t] += lv - gv; gv = lv
+                if gv <= 0.0:
+                    continue
+                w = rj / gv
+                for c in range(N):
+                    if lose[c] == 0.0:
+                        continue
+                    col = w * lose[c] / max(x[c], 1e-300)
+                    for i in range(N):
+                        if gain[i]:
+                            q[i][c] += gain[i] * col
+        L = [sum(q[i][c] for i in range(N)) for c in range(N)]
+        fastest = 0.0
+        for i in range(n):
+            net = sum(q[i][c] * x[c] for c in range(N)) - L[i] * x[i]
+            fastest = max(fastest, abs(net))
+        h = dt - elapsed
+        if fastest > 0.0:
+            h = min(h, max_change / fastest)
+        total += growth_rate(ir, theta, gammas, material=material) * h
+        if extents is not None:
+            for j in range(len(rj_all)):
+                extents[j] += rj_all[j] * h
+        A = [[-h * q[i][c] for c in range(N)] for i in range(N)]
+        for i in range(N):
+            A[i][i] += 1.0 + h * L[i]
+        y = _solve(A, x)
+        if y is not None:
+            theta = [min(1.0, max(0.0, v)) for v in y[:n]]
+        for t in range(nsite):
+            idx = [i for i in range(n) if site[i] == t]
+            occ = sum(theta[i] for i in idx)
+            if occ > 1.0:
+                for i in idx:
+                    theta[i] /= occ
+        elapsed += h
+        if trace is not None:
+            trace.append((t0 + elapsed, list(theta), total))
+    return theta, total
+
+
+# --------------------------------------------------------------------------
 # steady-state solve
 # --------------------------------------------------------------------------
 
