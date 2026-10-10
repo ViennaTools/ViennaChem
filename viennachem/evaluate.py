@@ -282,8 +282,9 @@ def step_coverages(ir, theta, gammas, dt, max_change=2e-4, ks=None,
     free-site part of every rate law. It follows the coverages, so pass the
     callable `blocked_fraction` rather than a value and it is re-evaluated on
     every sub-step. `extents`, a list one entry per reaction,
-    accumulates the time integral of each reaction rate over dt, which is what
-    a per-channel accounting of the growth needs. `trace`, a list, receives
+    accumulates the extent of each reaction over dt, taken from the same
+    implicit outflow of its consumed states as the growth, which is what a
+    per-channel accounting of the growth needs. `trace`, a list, receives
     `(t, theta, grown)` after every sub-step, which is what a figure of the
     coverages through a pulse reads.
     """
@@ -298,6 +299,42 @@ def step_coverages(ir, theta, gammas, dt, max_change=2e-4, ks=None,
     N = n + nsite
     theta = list(theta)
     total = 0.0 if grown is None else grown
+
+    def balance(rx, t):
+        """How reaction rx moves occupancy within site type t: the states it
+        fills and empties, with the free fraction taking up what the tracked
+        states do not balance."""
+        gain = [0.0] * N
+        lose = [0.0] * N
+        gv = lv = 0.0
+        for i in range(n):
+            if site[i] != t or rx["nu"][i] == 0.0:
+                continue
+            w = rx["nu"][i] * scale[i]
+            if w > 0.0:
+                gain[i] = w; gv += w
+            else:
+                lose[i] = -w; lv += -w
+        if gv > lv:
+            lose[n + t] += gv - lv; lv = gv
+        elif lv > gv:
+            gain[n + t] += lv - gv; gv = lv
+        return gain, lose, gv
+
+    # the states each reaction empties, weighted by their share of the
+    # occupancy it moves: what a step forms over a sub-step is taken from the
+    # same implicit outflow of these states that advances the coverages, so
+    # the film grown never exceeds what the coverages give up
+    consumed = []
+    for rx in ir["reactions"]:
+        entries = []
+        for t in range(nsite):
+            _, lose, gv = balance(rx, t)
+            if gv > 0.0:
+                entries += [(c, lose[c]) for c in range(N) if lose[c]]
+        tot = sum(w for _, w in entries)
+        consumed.append([(c, w / tot) for c, w in entries] if tot else [])
+    rho = [solid_density(ir, s, material) for s in range(len(ir["solids"]))]
     elapsed, sub = 0.0, 0
     while elapsed < dt - 1e-12 and sub < max_sub_steps:
         sub += 1
@@ -316,23 +353,7 @@ def step_coverages(ir, theta, gammas, dt, max_change=2e-4, ks=None,
             # one site type at a time: each is conserved on its own, and a
             # reaction touching two types moves each separately
             for t in range(nsite):
-                gain = [0.0] * N
-                lose = [0.0] * N
-                gv = lv = 0.0
-                for i in range(n):
-                    if site[i] != t or rx["nu"][i] == 0.0:
-                        continue
-                    w = rx["nu"][i] * scale[i]
-                    if w > 0.0:
-                        gain[i] = w; gv += w
-                    else:
-                        lose[i] = -w; lv += -w
-                # what the tracked states do not balance comes from, or returns
-                # to, the free fraction of the type
-                if gv > lv:
-                    lose[n + t] += gv - lv; lv = gv
-                elif lv > gv:
-                    gain[n + t] += lv - gv; gv = lv
+                gain, lose, gv = balance(rx, t)
                 if gv <= 0.0:
                     continue
                 w = rj / gv
@@ -351,14 +372,24 @@ def step_coverages(ir, theta, gammas, dt, max_change=2e-4, ks=None,
         h = dt - elapsed
         if fastest > 0.0:
             h = min(h, max_change / fastest)
-        total += growth_rate(ir, theta, gammas, material=material) * h
-        if extents is not None:
-            for j in range(len(rj_all)):
-                extents[j] += rj_all[j] * h
         A = [[-h * q[i][c] for c in range(N)] for i in range(N)]
         for i in range(N):
             A[i][i] += 1.0 + h * L[i]
         y = _solve(A, x)
+        # each step's rate times the fraction of its consumed states left at
+        # the end of the sub-step, the same implicit outflow that empties them
+        for j, rx in enumerate(ir["reactions"]):
+            if rj_all[j] == 0.0:
+                continue
+            phi = 1.0
+            if y is not None and consumed[j]:
+                phi = sum(w * max(y[c], 0.0) / max(x[c], 1e-300)
+                          for c, w in consumed[j])
+            if extents is not None:
+                extents[j] += rj_all[j] * phi * h
+            for s_, na in enumerate(rx["solidAtoms"]):
+                if na:
+                    total += na * rj_all[j] * phi / rho[s_] * h
         if y is not None:
             theta = [min(1.0, max(0.0, v)) for v in y[:n]]
         for t in range(nsite):
