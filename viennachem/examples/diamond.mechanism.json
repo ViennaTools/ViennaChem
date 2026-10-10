@@ -7,6 +7,7 @@
       "density": null
     }
   ],
+  "blocking": null,
   "coverages": [
     {
       "name": "H*",
@@ -93,14 +94,15 @@
       ],
       "solidAtoms": [
         0.0
-      ]
+      ],
+      "blocked": false
     },
     {
       "id": "R1r",
       "eq": "H2 + * -> H* + H",
       "constant": {
         "kind": "arrhenius",
-        "k0": 0.1,
+        "k0": 0.141421,
         "Ea": 0.6764800261720946,
         "beta": 0.0
       },
@@ -120,6 +122,7 @@
       "solidAtoms": [
         0.0
       ],
+      "blocked": false,
       "reverseOf": "R1"
     },
     {
@@ -146,7 +149,8 @@
       ],
       "solidAtoms": [
         0.0
-      ]
+      ],
+      "blocked": false
     },
     {
       "id": "R3",
@@ -172,7 +176,8 @@
       ],
       "solidAtoms": [
         1.0
-      ]
+      ],
+      "blocked": false
     }
   ],
   "constants": {

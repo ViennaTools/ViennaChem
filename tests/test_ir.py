@@ -525,9 +525,9 @@ REVERSIBLE = """
 name: langmuir_probe
 temperature: 900.0
 species:
-  A:  {phase: gas, flux: 5.0e2}
-  A*: {phase: surface}
-  S:  {phase: solid, rho: 5.0}
+  A:  {phase: gas, flux: 5.0e2, atoms: {Si: 1}}
+  A*: {phase: surface, atoms: {Si: 1}}
+  S:  {phase: solid, rho: 5.0, atoms: {Si: 1}}
 surface:
   - {eq: "A <-> A*", type: adsorption, s0: 0.5, Ea: 0.2, k0_rev: 1.0e13, Ea_rev: 1.4}
   - {eq: "A* -> S",  type: surface,    k0: 1.0e11, Ea: 1.6}
